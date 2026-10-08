@@ -1,0 +1,22 @@
+{
+  "default": "mainnet",
+  "networks": {
+    "mainnet": {
+      "chainId": 5042,
+      "rpcs": [
+        {"name": "arc", "url": "https://rpc.mainnet.arc.io"},
+        {"name": "blockdaemon", "url": "https://rpc.blockdaemon.mainnet.arc.io"},
+        {"name": "drpc", "url": "https://rpc.drpc.mainnet.arc.io"},
+        {"name": "quicknode", "url": "https://rpc.quicknode.mainnet.arc.io"}
+      ],
+      "pinger": null
+    },
+    "testnet": {
+      "chainId": 5042002,
+      "rpcs": [{"name": "arc", "url": "https://rpc.testnet.arc.io"}],
+      "pinger": null
+    }
+  },
+  "window": 50,
+  "maxLag": 2
+}

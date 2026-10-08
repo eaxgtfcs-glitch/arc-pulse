@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>arc-pulse — Arc network monitor</title>
+<style>
+body{font:15px system-ui,sans-serif;margin:0;background:#0f1218;color:#e6e9ef}
+main{max-width:900px;margin:auto;padding:16px}
+h1{font-size:20px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.card{background:#181d27;border-radius:8px;padding:10px}.card b{display:block;font-size:22px}.card span{color:#8b94a7;font-size:12px}
+table{width:100%;border-collapse:collapse;margin-top:14px}td,th{padding:6px;text-align:left;border-bottom:1px solid #262c3a}
+.ok{color:#4ade80}.warn{color:#fbbf24}.down{color:#f87171}select{background:#181d27;color:inherit;border:1px solid #262c3a;padding:3px}
+</style></head><body><main>
+<h1>arc-pulse <select id="net"></select></h1>
+<div class="cards">
+<div class="card"><span>Height (max)</span><b id="h">–</b></div>
+<div class="card"><span>Block time, s (window)</span><b id="bt">–</b></div>
+<div class="card"><span>Finalized lag, blocks</span><b id="fin">–</b></div>
+<div class="card"><span>Gas price, gwei</span><b id="gas">–</b></div>
+<div class="card"><span>Simple tx cost, USDC</span><b id="cost">–</b></div>
+<div class="card"><span>tx / block · tx / s</span><b id="act">–</b></div>
+</div>
+<table><thead><tr><th>Provider<th>Status<th>Height<th>Finalized<th>chainId<th>Latency</tr></thead><tbody id="rows"></tbody></table>
+<h2 style="font-size:16px">Pings</h2><div id="pings" style="color:#8b94a7">Pinger contract not deployed yet.</div>
+<p style="color:#8b94a7;font-size:12px">Reads public RPCs straight from your browser; no backend.</p>
+<script>
+let cfg,net;
+async function rpc(url,method,params=[]){
+  const t=performance.now();
+  const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method,params})});
+  const j=await r.json(); if(j.error)throw new Error(j.error.message);
+  return {v:j.result,ms:performance.now()-t};
+}
+const hex=x=>parseInt(x,16);
+async function probe(p){
+  try{
+    const [cid,bn,fin]=await Promise.all([rpc(p.url,"eth_chainId"),rpc(p.url,"eth_blockNumber"),
+      rpc(p.url,"eth_getBlockByNumber",["finalized",false]).catch(()=>null)]);
+    return {...p,up:true,chain:hex(cid.v),height:hex(bn.v),fin:fin&&fin.v?hex(fin.v.number):null,ms:Math.round(bn.ms)};
+  }catch(e){return {...p,up:false,err:String(e)}}
+}
+async function stats(url,height){
+  const n=cfg.window, nums=[...Array(n).keys()].map(i=>height-i);
+  const bs=await Promise.all(nums.map(b=>rpc(url,"eth_getBlockByNumber",["0x"+b.toString(16),false]).then(r=>r.v)));
+  const dt=hex(bs[0].timestamp)-hex(bs[n-1].timestamp);
+  const tx=bs.reduce((s,b)=>s+b.transactions.length,0);
+  return {bt:dt/(n-1),txb:tx/n,txs:dt>0?tx/dt:null};
+}
+async function tick(){
+  const res=await Promise.all(net.rpcs.map(probe)), up=res.filter(r=>r.up);
+  const max=Math.max(...up.map(r=>r.height),0);
+  document.getElementById("rows").innerHTML=res.map(r=>{
+    if(!r.up)return `<tr><td>${r.name}<td class=down>down<td>–<td>–<td>–<td>–`;
+    const lag=max-r.height,bad=lag>cfg.maxLag||r.chain!==net.chainId;
+    return `<tr><td>${r.name}<td class=${bad?"warn":"ok"}>${bad?(r.chain!==net.chainId?"wrong chain":"lag "+lag):"ok"}<td>${r.height}<td>${r.fin??"–"}<td>${r.chain}<td>${r.ms} ms`;
+  }).join("");
+  if(!up.length)return;
+  const best=up.find(r=>r.height===max);
+  h.textContent=max;
+  const f=up.filter(r=>r.fin!=null).map(r=>r.height-r.fin); fin.textContent=f.length?Math.max(...f):"n/a";
+  try{
+    const g=hex((await rpc(best.url,"eth_gasPrice")).v)/1e9; gas.textContent=g.toFixed(2);
+    cost.textContent=(g*1e9*21000/1e18).toFixed(6); // native gas token is USDC (18 dec as gas unit)
+    const s=await stats(best.url,max); bt.textContent=s.bt.toFixed(2); act.textContent=s.txb.toFixed(1)+" · "+(s.txs==null?"–":s.txs.toFixed(1));
+  }catch(e){}
+}
+(async()=>{
+  cfg=await (await fetch("config.json")).json();
+  const sel=document.getElementById("net");
+  for(const k in cfg.networks)sel.add(new Option(k,k));
+  const pick=()=>{net=cfg.networks[sel.value];tick()}; sel.onchange=pick; sel.value=cfg.default; pick(); setInterval(()=>tick(),5000);
+})();
+</script></main></body></html>
