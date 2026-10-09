@@ -7,7 +7,7 @@ gas and the real cost of a transaction, activity, and consistency across Arc's f
 contract that records measured confirmation latency every 10 minutes.
 
 **Live deployment:** https://eaxgtfcs-glitch.github.io/arc-pulse/  (mainnet by default; testnet selectable)
-**Mainnet contract (Pinger):** `<MAINNET_ADDRESS>` — https://explorer.arc.io/address/<MAINNET_ADDRESS>
+**Mainnet contract (Pinger):** `0x9762faf3e1875F73f436CEB4e9A006d01b3eb1b1` — https://explorer.arc.io/address/0x9762faf3e1875F73f436CEB4e9A006d01b3eb1b1
 **Repo:** https://github.com/eaxgtfcs-glitch/arc-pulse
 **Builder profile:** https://github.com/eaxgtfcs-glitch
 

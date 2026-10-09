@@ -10,7 +10,7 @@ of the previous one on-chain, and the dashboard shows its fee straight from the 
 
 | | Testnet (5042002) | Mainnet (5042) |
 |---|---|---|
-| Pinger | `0x99451d6ad09a203D9E6e1e4A329bC5ea98356088` | — |
+| Pinger | `0x99451d6ad09a203D9E6e1e4A329bC5ea98356088` | `0x9762faf3e1875F73f436CEB4e9A006d01b3eb1b1` |
 
 ## How it is verified
 `check_ui.py` opens the live page in a real browser, injects a dead RPC, and re-computes every number from the chain:
