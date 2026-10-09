@@ -1,5 +1,5 @@
 """Сверка с сетью (только чтение): P-1, P-2, P-3, P-4, P-7. Использование: checker.py [testnet|mainnet]"""
-import json, sys, time
+import os, json, sys, time
 from web3 import Web3
 
 cfg = json.load(open(__file__.rsplit('/', 1)[0] + '/config.json'))
@@ -51,6 +51,27 @@ if live:
     fh = c.eth.fee_history(5, 'latest')['baseFeePerGas']
     cost = 21000 * gp / 1e18
     check('P-3 gasPrice ≥ baseFee', gp >= fh[-1], f'{gp / 1e9:.1f} gwei, tx≈${cost:.5f}')
+
+# P-5 / P-3: пинги из журнала сверяем с сетью
+import pathlib, json as _j
+pf = pathlib.Path(__file__).parent / 'data' / f"pings-{sys.argv[1] if len(sys.argv) > 1 else cfg['default']}.jsonl"
+if pf.exists() and net.get('pinger'):
+    recs = [_j.loads(l) for l in pf.read_text().splitlines()]
+    cc = c
+    ok_r = ok_f = True
+    for r in recs:
+        rc = cc.eth.get_transaction_receipt(r['hash'])
+        ok_r &= rc.status == 1 and rc.blockNumber == r['block'] and rc.to.lower() == net['pinger'].lower() and len(rc.logs) == 1
+        ok_f &= rc.gasUsed * rc.effectiveGasPrice == r['gas_used'] * r['gas_price']
+    check('P-5 квитанции и событие Ping', ok_r, f'{len(recs)} пингов')
+    check('P-5 комиссия = gasUsed×цена', ok_f)
+    # баланс: сумма комиссий пингов = падение баланса между блоками до первого и после последнего пинга
+    b0 = cc.eth.get_balance(cfg_addr, recs[0]['block'] - 1) if (cfg_addr := os.environ.get('ARC_ADDR')) else None
+    if b0 is not None:
+        b1 = cc.eth.get_balance(cfg_addr, recs[-1]['block'])
+        check('P-5 баланс падает на сумму комиссий', b0 - b1 == sum(x['gas_used'] * x['gas_price'] for x in recs))
+    last = recs[-1]
+    check('P-3 цена ping ≈ gasPrice', abs(last['gas_price'] - gp) / gp < 0.25, f"{last['gas_price']/1e9:.1f} vs {gp/1e9:.1f} gwei")
 
 print('ИТОГ', 'PASS' if all(res) else 'FAIL')
 sys.exit(0 if all(res) else 1)

@@ -36,8 +36,11 @@ def spent_today(net):
 def send(w3, acct, tx):
     tx.setdefault("chainId", w3.eth.chain_id)
     tx["nonce"] = w3.eth.get_transaction_count(acct.address)
-    tx.setdefault("gasPrice", w3.eth.gas_price)
-    tx["gas"] = w3.eth.estimate_gas({**tx, "from": acct.address})
+    for k in ("maxFeePerGas", "maxPriorityFeePerGas"):
+        tx.pop(k, None)
+    tx["gasPrice"] = w3.eth.gas_price
+    tx.pop("gas", None)
+    tx["gas"] = int(w3.eth.estimate_gas({**tx, "from": acct.address}) * 1.2)
     t0 = time.time()
     h = w3.eth.send_raw_transaction(acct.sign_transaction(tx).raw_transaction)
     r = w3.eth.wait_for_transaction_receipt(h, timeout=60)

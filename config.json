@@ -14,7 +14,7 @@
     "testnet": {
       "chainId": 5042002,
       "rpcs": [{"name": "arc", "url": "https://rpc.testnet.arc.io"}],
-      "pinger": null
+      "pinger": "0x9762faf3e1875F73f436CEB4e9A006d01b3eb1b1"
     }
   },
   "window": 50,
