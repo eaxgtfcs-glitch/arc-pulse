@@ -19,6 +19,7 @@ MUTANTS = [
     ("dead provider not shown as down", "if(!r.up)return `<tr", "if(false)return `<tr"),
     ("pings shifted (wrong block)", "block:Number(word(d,b+1))", "block:Number(word(d,b+1))+1"),
     ("gas shown from stale constant", "const g=hex((await rpc(best.url,\"eth_gasPrice\")).v);", "const g=1e9;"),
+    ("finalized lag card hardcoded 1 (only fin)", '$("fin").textContent=f.length?Math.max(...f):"n/a";', '$("fin").textContent="1";'),
     ("finalized lag hidden", '$("fin").textContent=f.length?Math.max(...f):"n/a";', '$("fin").textContent="0";$("h").textContent=max-50;'),
 ]
 

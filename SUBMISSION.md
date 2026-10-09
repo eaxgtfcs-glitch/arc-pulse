@@ -1,0 +1,34 @@
+# Arc Microgrants — submission draft (arc-pulse)
+
+**Project name:** arc-pulse — a verifiable, backend-free monitor for Arc mainnet
+
+**One-liner:** A public dashboard that reads Arc straight from your browser and proves its numbers on-chain: block time, finality,
+gas and the real cost of a transaction, activity, and consistency across Arc's four public RPC providers — plus a mainnet `Pinger`
+contract that records measured confirmation latency every 10 minutes.
+
+**Live deployment:** https://eaxgtfcs-glitch.github.io/arc-pulse/  (mainnet by default; testnet selectable)
+**Mainnet contract (Pinger):** `<MAINNET_ADDRESS>` — https://explorer.arc.io/address/<MAINNET_ADDRESS>
+**Repo:** https://github.com/eaxgtfcs-glitch/arc-pulse
+**Builder profile:** https://github.com/eaxgtfcs-glitch
+
+## What it does
+- Queries Circle, Blockdaemon, dRPC and QuickNode Arc endpoints **directly from the browser** (all four allow CORS) — no backend to trust or to go down.
+- Shows height and finalized lag per provider (Arc finalizes instantly — the page shows it), average block time and tx/s over the last 50 blocks,
+  gas price and the USDC cost of a simple transfer, and flags providers that lag, return the wrong chain, or are down.
+- A small server-side pinger sends one transaction every 10 minutes to the `Pinger` contract on mainnet. Each ping stores
+  `(sentAtMs, blockNumber, blockTimestamp, prevLatencyMs)` in a ring buffer read with a single `eth_call`; the page shows confirmation
+  latency and each ping's **actual fee from its receipt** (gasUsed × effectiveGasPrice), so builders see what a transaction on Arc really costs and how fast it lands.
+
+## What it uses Arc for
+- Native USDC gas: every ping is paid in USDC; the dashboard reports fees in USDC from receipts.
+- Deterministic finality: finalized == latest is measured continuously across providers.
+- A mainnet contract (`Pinger`, owner-only writes) as a public, tamper-evident latency/fee log.
+
+## Why it's credible
+Every number is checked against the chain by an automated browser test (`check_ui.py`): it opens the live page, injects a dead RPC,
+and recomputes heights, block time, tx/block, gas bounds, pings and fees from Arc itself. `mutate.py` serves deliberately broken copies
+of the page and requires the test to fail on each — so the check itself is tested.
+
+## Where it goes next
+Paid x402 endpoint for agents (USDC EIP-3009 on Arc) exposing the same metrics as an API; alerts when a provider degrades;
+historical latency/fee charts for builders choosing an RPC.

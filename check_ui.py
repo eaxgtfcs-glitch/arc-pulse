@@ -70,6 +70,18 @@ def main():
           and max(up_h) <= int(cards["h"]) <= max(now_h.values()) and int(cards["h"]) >= max(now_h.values()) - slack,
           f"card {cards['h']}, providers max {max(up_h) if up_h else None}, chain {max(now_h.values())}")
     check("P-1 finalized lag ≤ maxLag", cards["fin"].isdigit() and int(cards["fin"]) <= CFG["maxLag"], cards["fin"])
+    # verify: finalized on the page must equal the chain's own finalized block (live), and the card must be the max lag of the shown providers
+    now_fin = {}
+    for k, c in w.items():
+        try: now_fin[k] = c.eth.get_block("finalized").number
+        except Exception: pass
+    bad_f = {k: (shown[k].get("fin"), now_fin[k]) for k in now_fin
+             if shown.get(k, {}).get("up") and shown[k].get("fin") is not None
+             and not (now_fin[k] - slack <= shown[k]["fin"] <= now_fin[k])}
+    lags = [shown[k]["height"] - shown[k]["fin"] for k in w if shown.get(k, {}).get("up") and shown[k].get("fin") is not None]
+    check("P-1 finalized on page = chain finalized; card = max lag of providers",
+          bool(now_fin) and not bad_f and bool(lags) and cards["fin"].isdigit() and int(cards["fin"]) == max(lags),
+          f"card {cards['fin']}, page lags {lags}, off: {bad_f}")
     # P-4: recompute block time and tx/block from the same 50 blocks
     head, W = st["stats"]["head"], CFG["window"]
     blocks = [ref.eth.get_block(head - i) for i in range(W)]
