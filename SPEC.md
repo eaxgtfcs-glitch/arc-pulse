@@ -29,3 +29,7 @@
 
 ## Порядок
 1) SPEC ✔ 2) index.html + config.json 3) Pinger.sol + deploy/ping на тестнете (кран faucet.circle.com) 4) checker.py 5) мейннет — после решения пользователя.
+
+## Подача (вне проверок сети)
+`tools/dorahacks_submit.py` заполняет форму Arc Microgrants на DoraHacks (браузер xvfb + профиль /root/.cache/dh-profile), `--submit` жмёт отправку —
+только после verify PASS по последнему коммиту и согласия пользователя (дано 09.10). Вход — `tools/dorahacks_login.py` + временная почта `tools/mailbox.py`.
