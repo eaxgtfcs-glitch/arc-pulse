@@ -15,4 +15,10 @@ mutate:
 	$(PY) mutate.py --net $(NET)
 
 # make verify — what the independent verifier runs
-verify: check mutate
+x402-check:
+	$(PY) x402/check_x402.py --net testnet
+
+x402-mutate:
+	$(PY) x402/mutate_x402.py
+
+verify: check mutate x402-check x402-mutate
