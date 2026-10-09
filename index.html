@@ -47,8 +47,9 @@ async function rpc(url,method,params=[],timeout=8000){
 }
 async function probe(p){
   try{
-    const [cid,bn,fin]=await Promise.all([rpc(p.url,"eth_chainId"),rpc(p.url,"eth_blockNumber"),
-      rpc(p.url,"eth_getBlockByNumber",["finalized",false]).catch(()=>null)]);
+    // finalized first, then latest: otherwise finalized can come back one block "ahead" of height
+    const [cid,fin]=await Promise.all([rpc(p.url,"eth_chainId"),rpc(p.url,"eth_getBlockByNumber",["finalized",false]).catch(()=>null)]);
+    const bn=await rpc(p.url,"eth_blockNumber");
     return {name:p.name,url:p.url,up:true,chain:hex(cid.v),height:hex(bn.v),fin:fin&&fin.v?hex(fin.v.number):null,ms:Math.round(bn.ms)};
   }catch(e){return {name:p.name,url:p.url,up:false,err:String(e)}}
 }
