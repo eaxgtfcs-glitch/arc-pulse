@@ -47,10 +47,11 @@ async function rpc(url,method,params=[],timeout=8000){
 }
 async function probe(p){
   try{
-    // finalized first, then latest: otherwise finalized can come back one block "ahead" of height
     const [cid,fin]=await Promise.all([rpc(p.url,"eth_chainId"),rpc(p.url,"eth_getBlockByNumber",["finalized",false]).catch(()=>null)]);
     const bn=await rpc(p.url,"eth_blockNumber");
-    return {name:p.name,url:p.url,up:true,chain:hex(cid.v),height:hex(bn.v),fin:fin&&fin.v?hex(fin.v.number):null,ms:Math.round(bn.ms)};
+    // RPC load balancers may answer "finalized" from a fresher node than "latest"; a finalized block N means the head is ≥ N
+    const f=fin&&fin.v?hex(fin.v.number):null, h=Math.max(hex(bn.v),f??0);
+    return {name:p.name,url:p.url,up:true,chain:hex(cid.v),height:h,fin:f,ms:Math.round(bn.ms)};
   }catch(e){return {name:p.name,url:p.url,up:false,err:String(e)}}
 }
 async function block(url,n){            // cached: blocks are final on Arc
