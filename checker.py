@@ -65,11 +65,11 @@ if pf.exists() and net.get('pinger'):
         ok_f &= rc.gasUsed * rc.effectiveGasPrice == r['gas_used'] * r['gas_price']
     check('P-5 квитанции и событие Ping', ok_r, f'{len(recs)} пингов')
     check('P-5 комиссия = gasUsed×цена', ok_f)
-    # баланс: сумма комиссий пингов = падение баланса между блоками до первого и после последнего пинга
-    b0 = cc.eth.get_balance(cfg_addr, recs[0]['block'] - 1) if (cfg_addr := os.environ.get('ARC_ADDR')) else None
-    if b0 is not None:
-        b1 = cc.eth.get_balance(cfg_addr, recs[-1]['block'])
-        check('P-5 баланс падает на сумму комиссий', b0 - b1 == sum(x['gas_used'] * x['gas_price'] for x in recs))
+    # баланс: в блоке каждого пинга баланс кошелька падает ровно на комиссию (входящие переводы между пингами не мешают)
+    cfg_addr = os.environ.get('ARC_ADDR')
+    if cfg_addr:
+        ok_b = all(cc.eth.get_balance(cfg_addr, r['block'] - 1) - cc.eth.get_balance(cfg_addr, r['block']) == r['gas_used'] * r['gas_price'] for r in recs)
+        check('P-5 баланс падает на комиссию в блоке каждого пинга', ok_b)
     last = recs[-1]
     check('P-3 цена ping ≈ gasPrice', abs(last['gas_price'] - gp) / gp < 0.25, f"{last['gas_price']/1e9:.1f} vs {gp/1e9:.1f} gwei")
 

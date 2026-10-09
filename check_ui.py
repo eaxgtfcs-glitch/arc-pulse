@@ -10,7 +10,8 @@ Opens the page in a real browser (with an extra dead RPC injected via ?addrpc=),
   against the contract and the pinger journal, fee against the tx receipt, P-9 page reachable.
 Exit code 0 only if everything matches.
 """
-import asyncio, json, statistics, sys, time
+import math
+import asyncio, json, math, statistics, sys, time
 from pathlib import Path
 from web3 import Web3
 from playwright.async_api import async_playwright
@@ -122,7 +123,7 @@ def main():
             check("P-6 prev latency on-chain = pinger journal", lat_ok)
             lat = sorted(p["prevLatMs"] for p in st["pings"] if p["prevLatMs"] > 0)
             if lat:
-                check("P-6 median card", cards["plat"] == str(round(statistics.median(lat))), f"{cards['plat']} vs {statistics.median(lat)}")
+                check("P-6 median card", cards["plat"] == str(math.floor(statistics.median(lat) + 0.5)), f"{cards['plat']} vs {statistics.median(lat)}")
         # only the owner can ping
         try:
             ct.functions.ping(0, 0).call({"from": "0x000000000000000000000000000000000000dEaD"})
