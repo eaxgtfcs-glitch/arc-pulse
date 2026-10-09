@@ -65,6 +65,10 @@ def main():
     slack = int(took * 2) + CFG["maxLag"] + 4
     bad = {k: (shown[k]["height"], now_h[k]) for k in w if not (now_h[k] - slack <= shown[k]["height"] <= now_h[k])}
     check("P-1 heights match chain", not bad, f"slack {slack}, off: {bad}" if bad else f"slack {slack}")
+    up_h = [shown[k]["height"] for k in w if shown.get(k, {}).get("up")]
+    check("P-1 height card = max provider height on page and ≈ chain", cards["h"].isdigit() and up_h
+          and max(up_h) <= int(cards["h"]) <= max(now_h.values()) and int(cards["h"]) >= max(now_h.values()) - slack,
+          f"card {cards['h']}, providers max {max(up_h) if up_h else None}, chain {max(now_h.values())}")
     check("P-1 finalized lag ≤ maxLag", cards["fin"].isdigit() and int(cards["fin"]) <= CFG["maxLag"], cards["fin"])
     # P-4: recompute block time and tx/block from the same 50 blocks
     head, W = st["stats"]["head"], CFG["window"]

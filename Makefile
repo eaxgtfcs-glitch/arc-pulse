@@ -9,3 +9,10 @@ check:
 	! git ls-files | grep -E '\.key$$|\.env$$'
 	ARC_ADDR=$$(cat /etc/agent/arc.address) $(PY) checker.py $(NET)
 	$(PY) check_ui.py $(URL) --net $(NET)
+
+# make mutate — check the checker: broken copies of the page must all FAIL check_ui.py (≈5 min)
+mutate:
+	$(PY) mutate.py --net $(NET)
+
+# make verify — what the independent verifier runs
+verify: check mutate

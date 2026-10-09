@@ -1,4 +1,6 @@
 # PROGRESS
+
+Задача в Linear: **CRO-104**. Проверка: `make verify` (проверки на реальных данных + подлоги), вердикт — VERIFY.md (пишет только verify).
 - 08.10 прогон 1: написан SPEC.md (P-1…P-10). Дальше: config.json + статичный index.html (P-1,2,3,4,7).
 - 08.10 прогон 2: config.json + index.html (P-1,2,3,4,7: 4 RPC, блоки/финализация/газ/активность; пинги — заглушка). JS в браузере не прогнан (нет node) — проверить внешне после Pages. Дальше: Pinger.sol + ping.py + тестнет (кран faucet.circle.com; капча → блокер).
 - 08.10 прогон 3: contracts/Pinger.sol (компилируется solc 0.8.24 через py-solc-x) + ping.py (balance|deploy|ping, потолок $0.20/сут, мейннет под ALLOW_MAINNET=1). БЛОКЕР: баланс тестнета 0, faucet.circle.com требует reCAPTCHA — нужен USDC на 0xaceB…6D в сети 5042002 (кран вручную). Дальше после пополнения: ping.py deploy --net testnet → адрес в config.json → ping; затем checker.py. Без крана можно делать checker.py для чтения (блоки/RPC).
@@ -8,3 +10,4 @@
   пинги через recent(), комиссия из квитанции, ?net= и ?addrpc=); check_ui.py — живая страница против сети, 17/17 PASS, подлоги ловятся;
   make check; таймер arc-pulse-ping (тестнет, 10 мин). Дальше: x402 (P-10) на тестнете, затем мейннет — с пользователем.
 
+- 09.10: make mutate (7 подлогов, все ловятся; нашёл дыру — карточка высоты не проверялась, закрыта), make verify, хук → verify.
