@@ -17,7 +17,8 @@ from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).parent
 CFG = json.loads((ROOT / "config.json").read_text())
-args = [a for a in sys.argv[1:] if not a.startswith("--")]
+_skip = {sys.argv.index("--net") + 1} if "--net" in sys.argv else set()
+args = [a for i, a in enumerate(sys.argv) if i and i not in _skip and not a.startswith("--")]
 URL = args[0] if args else "https://eaxgtfcs-glitch.github.io/arc-pulse/"
 NET = sys.argv[sys.argv.index("--net") + 1] if "--net" in sys.argv else CFG["default"]
 N = CFG["networks"][NET]
