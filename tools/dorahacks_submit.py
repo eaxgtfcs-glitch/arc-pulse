@@ -43,21 +43,30 @@ async def main():
         for ph, v in LINKS.items():
             await pg.get_by_placeholder(ph).fill(v)
         await pg.get_by_placeholder("Link URL (newsletters or social account)").first.fill("https://github.com/eaxgtfcs-glitch")
-        await pg.get_by_placeholder("A short description...").fill(SHORT)
-        ed = pg.locator("[contenteditable=true]").first
-        await ed.click(); await pg.keyboard.insert_text(details_md()); await pg.wait_for_timeout(1500)
-        await pg.screenshot(path="/tmp/dh_submit_filled.png", full_page=True)
-        btns = [b for b in await pg.locator("button").all_inner_texts() if b.strip()]
-        print("кнопки:", btns[-10:])
-        req = await pg.evaluate("[...document.querySelectorAll('.ant-form-item-required,[class*=required]')].map(e=>e.innerText.trim()).filter(Boolean)")
-        print("обязательные поля:", req)
+        # "A short description..." is the hidden team-description field (solo builder) — skip
+        await pg.get_by_text("Crypto / Web3", exact=True).click()                     # step 1: Profile — category
+        async def step(tag):
+            await pg.get_by_role("button", name="Continue").locator("visible=true").last.click(); await pg.wait_for_timeout(4000)
+            await pg.screenshot(path=f"/tmp/dh_step_{tag}.png")
+            print(tag, "→", [t for t in await pg.locator("h1,h2,h3,label").all_inner_texts() if t.strip()][:8])
+        await step("after-profile")
+        eds = pg.locator("[contenteditable=true]:visible")                         # step 2: Details
+        print("видимых редакторов:", await eds.count())
+        if await eds.count():
+            ed = eds.first; await ed.scroll_into_view_if_needed(); await ed.click()
+            await pg.keyboard.insert_text(details_md()); await pg.wait_for_timeout(1500)
+        await step("after-details")                                                 # step 3: Team
+        await pg.get_by_placeholder("A short description...").locator("visible=true").fill(
+            "Solo builder (pseudonymous), GitHub: github.com/eaxgtfcs-glitch. Builds monitoring and verification tooling; "
+            "arc-pulse is built, deployed and checked end-to-end against Arc mainnet by the same builder.")
+        await step("after-team")                                                    # step 4: Contact
+        await step("after-contact")                                                 # step 5: Submit (review)
+        btns = [b for b in await pg.locator("button:visible").all_inner_texts() if b.strip()]
+        print("кнопки на последнем шаге:", btns)
         if SUBMIT:
-            for name in ["Submit", "Submit Build", "Next", "Continue"]:
-                loc = pg.get_by_role("button", name=name, exact=True)
-                if await loc.count():
-                    await loc.last.click(); await pg.wait_for_timeout(8000); print("нажал", name, "→", pg.url); break
+            await pg.get_by_role("button", name="Submit").locator("visible=true").last.click(); await pg.wait_for_timeout(10000)
             await pg.screenshot(path="/tmp/dh_submit_after.png", full_page=True)
-            print((await pg.inner_text("body"))[:800].replace("\n", " | "))
+            print("после отправки:", pg.url, (await pg.inner_text("body"))[:600].replace("\n", " | "))
         await ctx.close()
 
 
