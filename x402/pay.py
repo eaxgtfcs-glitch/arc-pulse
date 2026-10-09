@@ -75,7 +75,7 @@ def main():
     req = next(a for a in body["accepts"] if a["network"] == NETWORKS[net][0] and a["extra"].get("assetTransferMethod"))
     tx, cn = pay(w3, acct, req, arg("--amount-override"), arg("--pay-to-override"))
     hdr = header_for(req, tx, cn)
-    Path("/tmp/x402-last-header").write_text(hdr)
+    Path(os.environ.get("X402_HEADER_FILE", "/tmp/x402-last-header")).write_text(hdr)
     st, body, headers = http(url, hdr)
     print(json.dumps({"status": st, "tx": tx, "payer": acct.address, "body": body,
                       "payment_response": next((v for k, v in headers.items() if k.lower() in ("x-payment-response", "payment-response")), None)}))

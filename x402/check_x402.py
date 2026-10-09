@@ -21,6 +21,8 @@ CFG = json.loads((ROOT / "config.json").read_text())
 w3 = Web3(Web3.HTTPProvider(CFG["networks"][NET]["rpcs"][0]["url"], request_kwargs={"timeout": 20}))
 wm = Web3(Web3.HTTPProvider(CFG["networks"]["mainnet"]["rpcs"][0]["url"], request_kwargs={"timeout": 20}))
 BUYER = Path("/etc/agent/arc-buyer.address").read_text().strip()
+HDR = f"/tmp/x402-last-header-{os.getpid()}"          # per-run: a shared fixed path was overwritten by concurrent runs ('too old' check replayed a foreign payment)
+os.environ["X402_HEADER_FILE"] = HDR
 fails, passes = [], []
 T_TRANSFER = Web3.keccak(text="Transfer(address,address,uint256)").hex().removeprefix("0x")
 
@@ -65,6 +67,7 @@ def main():
         check("unpaid → 402 with offer", st == 402 and acc.get("extra", {}).get("assetTransferMethod") == "eip3009-client-broadcast"
               and acc.get("asset", "").lower() == "0x3600000000000000000000000000000000000000", f"{st}")
         price, pay_to = int(acc["amount"]), acc["payTo"].lower()
+        check("offer payTo = our wallet (independent of the server's own config)", pay_to == Path("/etc/agent/arc.address").read_text().strip().lower(), pay_to)
         r = buy(url)
         check("correct payment → 200", r.get("status") == 200, str(r.get("status")) + " " + str(r.get("err", ""))[:200])
         if r.get("status") == 200:
@@ -78,7 +81,7 @@ def main():
                   and pr.get("payer", "").lower() == BUYER.lower(), str(pr)[:120])
             m = r["body"]; head = wm.eth.block_number
             check("metrics ≈ mainnet chain", head - 40 <= m.get("height", 0) <= head + 2 and m.get("chainId") == 5042, f"{m.get('height')} vs {head}")
-            rep = subprocess.run([PY, str(HERE / "pay.py"), url, "--net", NET, "--replay", "/tmp/x402-last-header"], capture_output=True, text=True, timeout=60)
+            rep = subprocess.run([PY, str(HERE / "pay.py"), url, "--net", NET, "--replay", HDR], capture_output=True, text=True, timeout=60)
             rs = json.loads(rep.stdout.strip().splitlines()[-1]) if rep.stdout.strip() else {}
             check("replay of the same payment → 402 (already used)", rs.get("status") == 402 and "already used" in str(rs), str(rs)[:160])
         r = buy(url, "--amount-override", "1")
@@ -95,7 +98,7 @@ def main():
     p2, url2 = server(max_age=5)
     try:
         time.sleep(12)
-        rep = subprocess.run([PY, str(HERE / "pay.py"), url2, "--net", NET, "--replay", "/tmp/x402-last-header"], capture_output=True, text=True, timeout=60)
+        rep = subprocess.run([PY, str(HERE / "pay.py"), url2, "--net", NET, "--replay", HDR], capture_output=True, text=True, timeout=60)
         rs = json.loads(rep.stdout.strip().splitlines()[-1]) if rep.stdout.strip() else {}
         check("receipt older than maxReceiptAgeSeconds → 402 (too old; fresh server, empty replay store)", rs.get("status") == 402 and "too old" in str(rs), str(rs)[:160])
     finally:
