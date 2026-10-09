@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """arc-pulse: деплой Pinger и пинг-транзакции. Использование:
-  ping.py balance|deploy|ping [--net testnet]
+  ping.py balance|deploy|ping|recent [--net testnet]
 Мейннет заблокирован без ALLOW_MAINNET=1. Ключ — /etc/agent/arc.key."""
 import json, os, sys, time
 from pathlib import Path
@@ -57,6 +57,13 @@ def main():
     if bal < 0.01:
         sys.exit(f"баланс {bal} слишком мал — кран faucet.circle.com")
     c = build()
+    if cmd == "recent":
+        ct = w3.eth.contract(address=n["pinger"], abi=c["abi"])
+        out, total = ct.functions.recent().call()
+        print("total", total)
+        for sent_ms, block, ts, prev_ms in out[:5]:
+            print(f"  block {block} ts {ts} sent {sent_ms} prevLatency {prev_ms} ms")
+        return
     if cmd == "deploy":
         r, _ = send(w3, acct, w3.eth.contract(abi=c["abi"], bytecode=c["bin"]).constructor().build_transaction(
             {"from": acct.address, "nonce": 0, "gas": 0}))
@@ -67,12 +74,15 @@ def main():
         if spent_today(net) >= MAX_DAILY_USD:
             sys.exit("потолок трат за сутки")
         ct = w3.eth.contract(address=n["pinger"], abi=c["abi"])
-        tx = ct.functions.ping().build_transaction({"from": acct.address, "nonce": 0, "gas": 0})
         sent = time.time()
+        prev = [json.loads(l) for l in (ROOT / "data" / f"pings-{net}.jsonl").read_text().splitlines()] if (ROOT / "data" / f"pings-{net}.jsonl").exists() else []
+        prev = [p for p in prev if p.get("pinger") == n["pinger"]]
+        prev_ms = int(prev[-1]["latency_s"] * 1000) if prev else 0
+        tx = ct.functions.ping(int(sent * 1000), prev_ms).build_transaction({"from": acct.address, "nonce": 0, "gas": 0})
         r, lat = send(w3, acct, tx)
         blk = w3.eth.get_block(r.blockNumber)
-        rec = {"net": net, "hash": r.transactionHash.hex(), "block": r.blockNumber, "block_ts": blk.timestamp,
-               "sent_at": sent, "latency_s": round(lat, 3), "gas_used": r.gasUsed,
+        rec = {"net": net, "pinger": n["pinger"], "hash": "0x" + r.transactionHash.hex().removeprefix("0x"), "block": r.blockNumber, "block_ts": blk.timestamp,
+               "sent_at": sent, "sent_ms": int(sent * 1000), "prev_latency_ms": prev_ms, "latency_s": round(lat, 3), "gas_used": r.gasUsed,
                "gas_price": r.effectiveGasPrice, "fee_usdc": r.gasUsed * r.effectiveGasPrice / 1e18}
         with open(ROOT / "data" / f"pings-{net}.jsonl", "a") as f:
             f.write(json.dumps(rec) + "\n")

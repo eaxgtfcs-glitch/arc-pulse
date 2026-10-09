@@ -2,70 +2,123 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>arc-pulse — Arc network monitor</title>
 <style>
-body{font:15px system-ui,sans-serif;margin:0;background:#0f1218;color:#e6e9ef}
-main{max-width:900px;margin:auto;padding:16px}
-h1{font-size:20px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
-.card{background:#181d27;border-radius:8px;padding:10px}.card b{display:block;font-size:22px}.card span{color:#8b94a7;font-size:12px}
-table{width:100%;border-collapse:collapse;margin-top:14px}td,th{padding:6px;text-align:left;border-bottom:1px solid #262c3a}
-.ok{color:#4ade80}.warn{color:#fbbf24}.down{color:#f87171}select{background:#181d27;color:inherit;border:1px solid #262c3a;padding:3px}
+:root{--bg:#0f1218;--card:#181d27;--line:#262c3a;--fg:#e6e9ef;--mute:#8b94a7}
+body{font:15px system-ui,sans-serif;margin:0;background:var(--bg);color:var(--fg)}
+main{max-width:960px;margin:auto;padding:16px}
+h1{font-size:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}h2{font-size:16px;margin-top:22px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.card{background:var(--card);border-radius:8px;padding:10px}.card b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.card span,.mute{color:var(--mute);font-size:12px}
+.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:8px;font-variant-numeric:tabular-nums}
+td,th{padding:6px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+.ok{color:#4ade80}.warn{color:#fbbf24}.down{color:#f87171}
+select{background:var(--card);color:inherit;border:1px solid var(--line);padding:3px}a{color:#93c5fd}
 </style></head><body><main>
-<h1>arc-pulse <select id="net"></select></h1>
+<h1>arc-pulse <select id="net" aria-label="network"></select><span class="mute" id="upd"></span></h1>
 <div class="cards">
-<div class="card"><span>Height (max)</span><b id="h">–</b></div>
-<div class="card"><span>Block time, s (window)</span><b id="bt">–</b></div>
+<div class="card"><span>Height (max across providers)</span><b id="h">–</b></div>
+<div class="card"><span>Avg block time, s (last 50)</span><b id="bt">–</b></div>
 <div class="card"><span>Finalized lag, blocks</span><b id="fin">–</b></div>
 <div class="card"><span>Gas price, gwei</span><b id="gas">–</b></div>
-<div class="card"><span>Simple tx cost, USDC</span><b id="cost">–</b></div>
-<div class="card"><span>tx / block · tx / s</span><b id="act">–</b></div>
+<div class="card"><span>Simple transfer cost, USDC</span><b id="cost">–</b></div>
+<div class="card"><span>tx / block · tx / s (last 50)</span><b id="act">–</b></div>
+<div class="card"><span>Ping confirm latency, ms (median, measured)</span><b id="plat">–</b></div>
+<div class="card"><span>Ping fee, USDC (last, from receipt)</span><b id="pfee">–</b></div>
 </div>
-<table><thead><tr><th>Provider<th>Status<th>Height<th>Finalized<th>chainId<th>Latency</tr></thead><tbody id="rows"></tbody></table>
-<h2 style="font-size:16px">Pings</h2><div id="pings" style="color:#8b94a7">Pinger contract not deployed yet.</div>
-<p style="color:#8b94a7;font-size:12px">Reads public RPCs straight from your browser; no backend.</p>
+<h2>RPC providers</h2>
+<div class="scroll"><table><thead><tr><th>Provider<th>Status<th>Height<th>Finalized<th>chainId<th>Latency</tr></thead><tbody id="rows"></tbody></table></div>
+<h2>On-chain pings <span class="mute" id="pinfo"></span></h2>
+<div class="scroll"><table><thead><tr><th>#<th>Block<th>Block time (UTC)<th>Prev ping latency<th>Fee, USDC<th>Tx</tr></thead><tbody id="pings"></tbody></table></div>
+<p class="mute">Everything is read from public Arc RPCs directly in your browser — no backend. A server-side pinger sends one small
+transaction every 10 minutes to the <code>Pinger</code> contract; each ping records the confirmation latency of the previous one on-chain,
+and its fee is read from the transaction receipt. Source: <a href="https://github.com/eaxgtfcs-glitch/arc-pulse">github.com/eaxgtfcs-glitch/arc-pulse</a>.</p>
 <script>
-let cfg,net;
-async function rpc(url,method,params=[]){
-  const t=performance.now();
-  const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method,params})});
-  const j=await r.json(); if(j.error)throw new Error(j.error.message);
-  return {v:j.result,ms:performance.now()-t};
+const SEL_RECENT="0xbb4db8c0", TOPIC_PING="0x822dbad9c6edbdedc34a89cda7f0e2c476ac0a56551658b043ebb1b4f1cfde34";
+const S={net:null,providers:[],blocks:new Map(),pings:[],updated:0}; window.__arcpulse=S;   // state for humans and the checker
+let cfg,net,timer;
+const hex=x=>parseInt(x,16), $=id=>document.getElementById(id);
+async function rpc(url,method,params=[],timeout=8000){
+  const t=performance.now(),c=new AbortController(),k=setTimeout(()=>c.abort(),timeout);
+  try{
+    const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},signal:c.signal,
+      body:JSON.stringify({jsonrpc:"2.0",id:1,method,params})});
+    const j=await r.json(); if(j.error)throw new Error(j.error.message); return {v:j.result,ms:performance.now()-t};
+  }finally{clearTimeout(k)}
 }
-const hex=x=>parseInt(x,16);
 async function probe(p){
   try{
     const [cid,bn,fin]=await Promise.all([rpc(p.url,"eth_chainId"),rpc(p.url,"eth_blockNumber"),
       rpc(p.url,"eth_getBlockByNumber",["finalized",false]).catch(()=>null)]);
-    return {...p,up:true,chain:hex(cid.v),height:hex(bn.v),fin:fin&&fin.v?hex(fin.v.number):null,ms:Math.round(bn.ms)};
-  }catch(e){return {...p,up:false,err:String(e)}}
+    return {name:p.name,url:p.url,up:true,chain:hex(cid.v),height:hex(bn.v),fin:fin&&fin.v?hex(fin.v.number):null,ms:Math.round(bn.ms)};
+  }catch(e){return {name:p.name,url:p.url,up:false,err:String(e)}}
 }
-async function stats(url,height){
-  const n=cfg.window, nums=[...Array(n).keys()].map(i=>height-i);
-  const bs=await Promise.all(nums.map(b=>rpc(url,"eth_getBlockByNumber",["0x"+b.toString(16),false]).then(r=>r.v)));
-  const dt=hex(bs[0].timestamp)-hex(bs[n-1].timestamp);
-  const tx=bs.reduce((s,b)=>s+b.transactions.length,0);
-  return {bt:dt/(n-1),txb:tx/n,txs:dt>0?tx/dt:null};
+async function block(url,n){            // cached: blocks are final on Arc
+  if(S.blocks.has(n))return S.blocks.get(n);
+  const b=(await rpc(url,"eth_getBlockByNumber",["0x"+n.toString(16),false])).v;
+  const v={n,ts:hex(b.timestamp),tx:b.transactions.length,hash:b.hash}; S.blocks.set(n,v);
+  if(S.blocks.size>400){for(const k of [...S.blocks.keys()].sort((a,b)=>a-b).slice(0,S.blocks.size-300))S.blocks.delete(k)}
+  return v;
 }
+async function window50(url,head){
+  const W=cfg.window, nums=[...Array(W).keys()].map(i=>head-i);
+  const bs=await Promise.all(nums.map(n=>block(url,n)));
+  const dt=bs[0].ts-bs[W-1].ts, tx=bs.reduce((s,b)=>s+b.tx,0);
+  return {bt:dt/(W-1),txb:tx/W,txs:dt>0?tx/dt:null};
+}
+function word(d,i){return BigInt("0x"+d.slice(2+64*i,66+64*i))}
+async function readPings(urls){
+  if(!net.pinger){$("pinfo").textContent="(pinger not deployed on this network)";return}
+  let d,url;
+  for(url of urls){try{d=(await rpc(url,"eth_call",[{to:net.pinger,data:SEL_RECENT},"latest"])).v;break}catch(e){}}
+  if(!d)return;
+  const total=Number(word(d,1)), off=Number(word(d,0))/32, n=Number(word(d,off)), out=[];
+  for(let i=0;i<n;i++){const b=off+1+i*4;
+    out.push({seq:total-i,sentMs:Number(word(d,b)),block:Number(word(d,b+1)),ts:Number(word(d,b+2)),prevLatMs:Number(word(d,b+3))})}
+  const shown=out.slice(0,10);
+  await Promise.all(shown.map(async p=>{          // fee from the receipt of the ping tx (single-block log query)
+    const old=S.pings.find(q=>q.seq===p.seq&&q.fee!=null); if(old){p.fee=old.fee;p.tx=old.tx;return}
+    for(const u of urls){try{
+      const logs=(await rpc(u,"eth_getLogs",[{address:net.pinger,topics:[TOPIC_PING],fromBlock:"0x"+p.block.toString(16),toBlock:"0x"+p.block.toString(16)}])).v;
+      const tx=logs[0].transactionHash, rc=(await rpc(u,"eth_getTransactionReceipt",[tx])).v;
+      p.tx=tx; p.fee=Number(BigInt(rc.gasUsed)*BigInt(rc.effectiveGasPrice))/1e18; return}catch(e){}}
+  }));
+  S.pings=shown;
+  const lat=shown.map(p=>p.prevLatMs).filter(x=>x>0).sort((a,b)=>a-b);
+  const med=lat.length?(lat.length%2?lat[(lat.length-1)/2]:Math.round((lat[lat.length/2-1]+lat[lat.length/2])/2)):null;
+  S.medianLatMs=med; $("plat").textContent=med??"–";
+  $("pfee").textContent=shown[0]&&shown[0].fee!=null?shown[0].fee.toFixed(6):"–";
+  $("pinfo").textContent=`(${total} total · contract ${net.pinger.slice(0,8)}…)`;
+  $("pings").innerHTML=shown.map(p=>`<tr data-seq="${p.seq}" data-block="${p.block}" data-fee="${p.fee??""}" data-lat="${p.prevLatMs}"><td>${p.seq}<td>${p.block}<td>${new Date(p.ts*1000).toISOString().slice(0,19).replace("T"," ")}<td>${p.prevLatMs?p.prevLatMs+" ms":"–"}<td>${p.fee!=null?p.fee.toFixed(6):"–"}<td>${p.tx?p.tx.slice(0,10)+"…":"–"}`).join("");
+}
+let tickN=0;
 async function tick(){
   const res=await Promise.all(net.rpcs.map(probe)), up=res.filter(r=>r.up);
-  const max=Math.max(...up.map(r=>r.height),0);
-  document.getElementById("rows").innerHTML=res.map(r=>{
-    if(!r.up)return `<tr><td>${r.name}<td class=down>down<td>–<td>–<td>–<td>–`;
-    const lag=max-r.height,bad=lag>cfg.maxLag||r.chain!==net.chainId;
-    return `<tr><td>${r.name}<td class=${bad?"warn":"ok"}>${bad?(r.chain!==net.chainId?"wrong chain":"lag "+lag):"ok"}<td>${r.height}<td>${r.fin??"–"}<td>${r.chain}<td>${r.ms} ms`;
+  S.providers=res; const max=Math.max(...up.map(r=>r.height),0);
+  $("rows").innerHTML=res.map(r=>{
+    if(!r.up)return `<tr data-name="${r.name}" data-status="down"><td>${r.name}<td class=down>down<td>–<td>–<td>–<td>–`;
+    const lag=max-r.height,bad=lag>cfg.maxLag||r.chain!==net.chainId, st=bad?(r.chain!==net.chainId?"wrong chain":"lag "+lag):"ok";
+    return `<tr data-name="${r.name}" data-status="${st}" data-height="${r.height}"><td>${r.name}<td class=${bad?"warn":"ok"}>${st}<td>${r.height}<td>${r.fin??"–"}<td>${r.chain}<td>${r.ms} ms`;
   }).join("");
   if(!up.length)return;
-  const best=up.find(r=>r.height===max);
-  h.textContent=max;
-  const f=up.filter(r=>r.fin!=null).map(r=>r.height-r.fin); fin.textContent=f.length?Math.max(...f):"n/a";
+  const good=up.filter(r=>r.chain===net.chainId).sort((a,b)=>b.height-a.height||a.ms-b.ms), best=good[0]; if(!best)return;
+  $("h").textContent=max;
+  const f=good.filter(r=>r.fin!=null).map(r=>r.height-r.fin); $("fin").textContent=f.length?Math.max(...f):"n/a";
   try{
-    const g=hex((await rpc(best.url,"eth_gasPrice")).v)/1e9; gas.textContent=g.toFixed(2);
-    cost.textContent=(g*1e9*21000/1e18).toFixed(6); // native gas token is USDC (18 dec as gas unit)
-    const s=await stats(best.url,max); bt.textContent=s.bt.toFixed(2); act.textContent=s.txb.toFixed(1)+" · "+(s.txs==null?"–":s.txs.toFixed(1));
+    const g=hex((await rpc(best.url,"eth_gasPrice")).v); S.gasPrice=g;
+    $("gas").textContent=(g/1e9).toFixed(2); $("cost").textContent=(g*21000/1e18).toFixed(6);   // native gas token: USDC, 18 decimals
+    const s=await window50(best.url,best.height); S.stats={...s,head:best.height};
+    $("bt").textContent=s.bt.toFixed(2); $("act").textContent=s.txb.toFixed(1)+" · "+(s.txs==null?"–":s.txs.toFixed(1));
   }catch(e){}
+  if(tickN++%6===0)await readPings(good.map(r=>r.url));
+  S.updated=Date.now(); $("upd").textContent="updated "+new Date().toISOString().slice(11,19)+" UTC";
 }
 (async()=>{
-  cfg=await (await fetch("config.json")).json();
-  const sel=document.getElementById("net");
+  cfg=await (await fetch("config.json",{cache:"no-store"})).json();
+  const q=new URLSearchParams(location.search), sel=$("net");
   for(const k in cfg.networks)sel.add(new Option(k,k));
-  const pick=()=>{net=cfg.networks[sel.value];tick()}; sel.onchange=pick; sel.value=cfg.default; pick(); setInterval(()=>tick(),5000);
+  const pick=()=>{net=JSON.parse(JSON.stringify(cfg.networks[sel.value]));
+    if(q.get("addrpc"))net.rpcs.push({name:"extra",url:q.get("addrpc")});   // used by the checker to simulate a dead provider
+    S.net=sel.value;S.blocks.clear();S.pings=[];tickN=0;clearInterval(timer);tick();timer=setInterval(tick,5000)};
+  sel.onchange=pick; sel.value=q.get("net")&&cfg.networks[q.get("net")]?q.get("net"):cfg.default; pick();
 })();
 </script></main></body></html>
