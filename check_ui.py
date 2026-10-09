@@ -83,6 +83,7 @@ def main():
     check("P-1 finalized on page = chain finalized; card = max lag of providers",
           bool(now_fin) and not bad_f and bool(lags) and cards["fin"].isdigit() and int(cards["fin"]) == max(lags),
           f"card {cards['fin']}, page lags {lags}, off: {bad_f}")
+    check("P-1 no provider shows finalized ahead of its height", bool(lags) and min(lags) >= 0, f"page lags {lags}")
     # P-4: recompute block time and tx/block from the same 50 blocks
     head, W = st["stats"]["head"], CFG["window"]
     blocks = [ref.eth.get_block(head - i) for i in range(W)]
