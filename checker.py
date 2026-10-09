@@ -70,6 +70,8 @@ if pf.exists() and net.get('pinger'):
     if cfg_addr:
         ok_b = all(cc.eth.get_balance(cfg_addr, r['block'] - 1) - cc.eth.get_balance(cfg_addr, r['block']) == r['gas_used'] * r['gas_price'] for r in recs)
         check('P-5 баланс падает на комиссию в блоке каждого пинга', ok_b)
+    else:
+        check('P-5 баланс: ARC_ADDR не задан, проверка не выполнена', False)
     last = recs[-1]
     check('P-3 цена ping ≈ gasPrice', abs(last['gas_price'] - gp) / gp < 0.25, f"{last['gas_price']/1e9:.1f} vs {gp/1e9:.1f} gwei")
 
