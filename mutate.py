@@ -19,7 +19,7 @@ MUTANTS = [
     ("dead provider not shown as down", "if(!r.up)return `<tr", "if(false)return `<tr"),
     ("pings shifted (wrong block)", "block:Number(word(d,b+1))", "block:Number(word(d,b+1))+1"),
     ("gas shown from stale constant", "const g=hex((await rpc(best.url,\"eth_gasPrice\")).v);", "const g=1e9;"),
-    ("finalized lag card hardcoded 1 (only fin)", '$("fin").textContent=f.length?Math.max(...f):"n/a";', '$("fin").textContent="1";'),
+    ("finalized lag card hardcoded 7 (only fin)", '$("fin").textContent=f.length?Math.max(...f):"n/a";', '$("fin").textContent="7";'),
     ("finalized lag hidden", '$("fin").textContent=f.length?Math.max(...f):"n/a";', '$("fin").textContent="0";$("h").textContent=max-50;'),
 ]
 
@@ -55,9 +55,9 @@ def main():
                 print(f"BAD  mutant '{name}': anchor not found exactly once — update MUTANTS"); ok = False; continue
             (d / "index.html").write_text(src.replace(old, new))
             rc, fails = run_check(d)
-            caught = rc != 0
-            how = "; ".join(f[5:60] for f in fails[:2]) or "check crashed/timed out (page never reached a consistent state)"
-            print(("ok   " if caught else "MISS ") + f"mutant '{name}' " + ("caught: " + how if caught else "NOT caught"))
+            caught = rc != 0 and bool(fails)          # a crash is not a catch: a specific check must fail
+            how = "; ".join(f[5:60] for f in fails[:2])
+            print(("ok   " if caught else "MISS ") + f"mutant '{name}' " + ("caught: " + how if caught else "NOT caught" + (" (check crashed)" if rc else "")))
             ok &= caught
     print("MUTATION RESULT", "PASS" if ok else "FAIL")
     sys.exit(0 if ok else 1)

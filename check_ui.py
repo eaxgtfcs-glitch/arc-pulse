@@ -42,7 +42,10 @@ async def read_page():
         check("P-9 page reachable", resp is not None and resp.ok, f"HTTP {resp.status if resp else '?'}")
         await pg.wait_for_function("window.__arcpulse && __arcpulse.updated>0 && __arcpulse.stats", timeout=60000)
         if N.get("pinger"):
-            await pg.wait_for_function("__arcpulse.pings.length>0 && __arcpulse.pings.every(p=>p.fee!=null)", timeout=60000)
+            try:   # a page that never resolves fees must fail a named check below, not crash the checker
+                await pg.wait_for_function("__arcpulse.pings.length>0 && __arcpulse.pings.every(p=>p.fee!=null)", timeout=60000)
+            except Exception:
+                pass
         st = json.loads(await pg.evaluate("JSON.stringify(window.__arcpulse,(k,v)=>k==='blocks'?undefined:v)"))
         cards = {i: await pg.inner_text(f"#{i}") for i in ["h", "bt", "fin", "gas", "cost", "act", "plat", "pfee"]}
         cards["rows"] = await pg.evaluate("[...document.querySelectorAll('#rows tr')].map(r=>[r.dataset.name,r.dataset.status,r.cells[1].innerText])")
@@ -109,8 +112,11 @@ def main():
         page_pings = [{"seq": p["seq"], "block": p["block"], "prevLatMs": p["prevLatMs"]} for p in st["pings"]]
         check("P-6 pings = contract (seq, block, prev latency)", page_pings == chain_pings[:len(page_pings)] and page_pings,
               f"{len(page_pings)} shown, total {total}")
+        check("P-6 every ping has a fee from its receipt", st["pings"] and all(p.get("fee") is not None and p.get("tx") for p in st["pings"]))
         fee_ok = True
         for p in st["pings"]:
+            if not p.get("tx"):
+                fee_ok = False; continue
             rc = ref.eth.get_transaction_receipt(p["tx"])
             fee_ok &= rc.blockNumber == p["block"] and abs(rc.gasUsed * rc.effectiveGasPrice / 1e18 - p["fee"]) < 1e-12
         check("P-6 fee = receipt gasUsed × effectiveGasPrice", fee_ok)
