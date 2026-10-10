@@ -1,0 +1,21 @@
+# Cloudflare Worker for the x402 paid API. Deploy: tools/x402_deploy.sh (needs /etc/agent/cloudflare.token).
+name = "arc-pulse-x402"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+NET = "mainnet"
+PAY_TO = "0xaceBDba8aaf3Fb3E42E32D509390c18C03ED676D"
+PRICE = "10000"
+MAX_AGE = "600"
+PUBLIC_URL = "https://arc-pulse-x402.workers.dev"
+PAY_RPC = "https://rpc.mainnet.arc.io"
+METRICS_RPC = "https://rpc.mainnet.arc.io"
+METRICS_NET = "mainnet"
+METRICS_CHAIN_ID = "5042"
+PINGER = "0x9762faf3e1875F73f436CEB4e9A006d01b3eb1b1"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "arc-pulse-x402"
+database_id = "00000000-0000-0000-0000-000000000000"

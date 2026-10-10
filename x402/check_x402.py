@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """Check the paid API with REAL payments on Arc testnet (P-10). Starts its own server instance from a given dir.
 
-  check_x402.py [--srcdir x402] [--net testnet]       exit 0 only if every case behaves
+  check_x402.py [--srcdir x402/worker] [--net testnet]   local Worker (wrangler dev), exit 0 only if every case behaves
+  check_x402.py --url https://…/metrics --net mainnet   the deployed endpoint (the "too old" case needs a 5 s window — local only)
 
 Cases: unpaid → 402 with a valid offer; correct payment → 200, payment-response, and an on-chain USDC Transfer
 (from the buyer, to payTo, ≥ price) independently confirmed from the receipt by THIS script; replay of the same
 header → 402; underpay (1 atomic unit — on Arc its native mirror Transfer is ×1e12, the classic trap) → 402;
 payment to the wrong payee → 402; receipt older than maxReceiptAgeSeconds → 402; metrics ≈ chain.
 """
-import base64, json, os, socket, subprocess, sys, time, urllib.request, urllib.error
+import base64, json, os, signal, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 from pathlib import Path
 from web3 import Web3
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-SRC = Path(sys.argv[sys.argv.index("--srcdir") + 1]).resolve() if "--srcdir" in sys.argv else HERE
+SRC = Path(sys.argv[sys.argv.index("--srcdir") + 1]).resolve() if "--srcdir" in sys.argv else HERE / "worker"
+URL = sys.argv[sys.argv.index("--url") + 1] if "--url" in sys.argv else None
+WRANGLER = str(HERE / "worker" / "node_modules" / ".bin" / "wrangler")
 NET = sys.argv[sys.argv.index("--net") + 1] if "--net" in sys.argv else "testnet"
 PY = str(ROOT / ".venv/bin/python")
 CFG = json.loads((ROOT / "config.json").read_text())
@@ -33,19 +36,37 @@ def check(name, ok, info=""):
 
 
 def server(max_age=600):
+    """Run the Worker from SRC locally (wrangler dev: workerd + local D1, fresh store per call) -> (process, /metrics URL)."""
+    if URL:
+        return None, URL
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
-    db = f"/tmp/x402-check-{port}.sqlite"
-    env = {**os.environ, "ARC_PULSE_ROOT": str(ROOT), "X402_NET": NET, "X402_PORT": str(port), "X402_DB": db, "X402_MAX_AGE": str(max_age),
-           "X402_PUBLIC_URL": "http://x402-check.local"}   # same resource for every instance → same nonce binding
-    p = subprocess.Popen([PY, str(SRC / "server.py")], env=env, cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-    for _ in range(50):
+    store = tempfile.mkdtemp(prefix="x402-d1-")
+    n = CFG["networks"]
+    vars_ = {"NET": NET, "PAY_RPC": n[NET]["rpcs"][0]["url"], "MAX_AGE": str(max_age),
+             "PUBLIC_URL": "http://x402-check.local"}   # same resource for every instance → same nonce binding
+    conf = str(SRC / "wrangler.toml")
+    env = {**os.environ, "WRANGLER_SEND_METRICS": "false", "CI": "1"}
+    subprocess.run([WRANGLER, "d1", "execute", "DB", "--local", "--persist-to", store, "-c", conf, "--file", str(SRC / "schema.sql")],
+                   env=env, capture_output=True, timeout=120, check=True)
+    cmd = [WRANGLER, "dev", "--local", "--ip", "127.0.0.1", "--port", str(port), "--persist-to", store, "-c", conf]
+    for k, v in vars_.items():
+        cmd += ["--var", f"{k}:{v}"]
+    p = subprocess.Popen(cmd, env=env, cwd=str(SRC), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, start_new_session=True)
+    for _ in range(120):
         try:
             urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2); break
         except Exception:
-            time.sleep(0.2)
+            if p.poll() is not None:
+                sys.exit("SERVER DID NOT START: " + p.stderr.read().decode()[-500:])
+            time.sleep(0.5)
     else:
-        sys.exit("SERVER DID NOT START: " + p.stderr.read().decode()[-500:] if p.poll() is not None else "SERVER DID NOT START")
+        sys.exit("SERVER DID NOT START")
     return p, f"http://127.0.0.1:{port}/metrics"
+
+
+def stop(p):
+    if p:
+        os.killpg(p.pid, signal.SIGTERM); p.wait(timeout=20)
 
 
 def buy(url, *extra):
@@ -89,12 +110,15 @@ def main():
         r = buy(url, "--pay-to-override", BUYER)
         check("payment to wrong payee → 402 (no USDC Transfer to payTo)", r.get("status") == 402 and "no single USDC Transfer" in str(r.get("body")), str(r.get("body", r))[:160])
     finally:
-        p.terminate()
+        stop(p)
+    if URL:
+        print(f"RESULT {'PASS' if not fails else 'FAIL'}: {len(passes)} passed, {len(fails)} failed" + (f" — {fails}" if fails else ""))
+        sys.exit(1 if fails else 0)
     p, url = server(max_age=5)
     try:
         hdr_run = buy(url)  # pays, served (fresh), then the header is presented again after the age window from a NEW server db
     finally:
-        p.terminate()
+        stop(p)
     p2, url2 = server(max_age=5)
     try:
         time.sleep(12)
@@ -102,7 +126,7 @@ def main():
         rs = json.loads(rep.stdout.strip().splitlines()[-1]) if rep.stdout.strip() else {}
         check("receipt older than maxReceiptAgeSeconds → 402 (too old; fresh server, empty replay store)", rs.get("status") == 402 and "too old" in str(rs), str(rs)[:160])
     finally:
-        p2.terminate()
+        stop(p2)
     print(f"RESULT {'PASS' if not fails else 'FAIL'}: {len(passes)} passed, {len(fails)} failed" + (f" — {fails}" if fails else ""))
     sys.exit(1 if fails else 0)
 

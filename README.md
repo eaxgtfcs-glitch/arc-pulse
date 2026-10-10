@@ -18,11 +18,11 @@ provider heights, finalized lag, average block time and tx/block from the same 5
 pings against the contract, fees against receipts, latency against the pinger log, owner-only pinging. `make check` runs it all.
 
 ## Paid API for agents (x402) — optional add-on
-`x402/` — the same verified metrics as JSON for bots and AI agents, paid per request in USDC on Arc using x402 `exact` with the
+`x402/worker/` (a Cloudflare Worker with a D1 replay store) — the same verified metrics as JSON for bots and AI agents, paid per request in USDC on Arc using x402 `exact` with the
 `eip3009-client-broadcast` transfer method (the buyer broadcasts USDC `transferWithAuthorization` itself — on Arc gas is USDC — and the
-server only verifies the receipt; nonce binding per the [x402-arc spec](https://github.com/kaditang/x402-arc), test vector matches).
+Worker only verifies the receipt; nonce binding per the [x402-arc spec](https://github.com/kaditang/x402-arc), test vector matches).
 Price $0.01 (the buyer's gas is ≈$0.002). The free dashboard stays free.
 
 Status: implemented and checked with **real payments on Arc testnet** — `x402/check_x402.py` (paid → 200 with an on-chain USDC Transfer;
-replay, underpay, wrong payee and stale receipt → 402 with the right reason) and `x402/mutate_x402.py` (5 broken servers, each caught —
+replay, underpay, wrong payee and stale receipt → 402 with the right reason) and `x402/mutate_x402.py` (5 broken Workers, each caught —
 including Arc's native mirror `Transfer` ×1e12 trap). Public endpoint: coming next.

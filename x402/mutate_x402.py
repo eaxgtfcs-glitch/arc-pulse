@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Check the x402 checker: run check_x402.py against deliberately broken copies of the server; every mutant must FAIL.
+"""Check the x402 checker: run check_x402.py against deliberately broken copies of the Worker; every mutant must FAIL.
 Each mutant costs a few testnet payments (≈$0.01 of faucet USDC). Exit 0 only if all are caught."""
 import shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PY = str(HERE.parent / ".venv/bin/python")
-MUTANTS = [  # (name, file, old, new)
-    ("Transfer matched by topic only (Arc native mirror ×1e12 accepted)", "x402lib.py",
-     "if l.address.lower() == asset and len(l.topics) == 3      # only the USDC token's own log", "if len(l.topics) == 3"),
-    ("payment not claimed before serving (replay works)", "server.py",
-     'c = db(); c.execute("insert into spent(nonce, tx, payer, at) values(?,?,?,?)", (nonce, pl["transaction"].lower(), payer, time.time())); c.commit()',
-     "pass"),
-    ("payee not checked", "x402lib.py", 'and _topic_addr(l.topics[2]) == req["payTo"].lower()', ""),
-    ("amount not checked", "x402lib.py", 'and int(l.data.hex() or "0", 16) >= int(req["amount"])]', "]"),
-    ("receipt age not checked", "x402lib.py", 'if now - ts > int(req["extra"].get("maxReceiptAgeSeconds", 600)) or ts - now > 30:', "if False:"),
+MUTANTS = [  # (name, file in worker/, old, new)
+    ("Transfer matched by topic only (Arc native mirror ×1e12 accepted)", "worker.js",
+     "l.address.toLowerCase() === asset && l.topics.length === 3   // only the USDC token's own log", "l.topics.length === 3"),
+    ("payment not claimed before serving (replay works)", "worker.js",
+     'await env.DB.prepare("insert into spent(nonce, tx, payer, at) values(?,?,?,?)")\n        .bind(nonce, String(pl.transaction).toLowerCase(), payer, Date.now() / 1000).run();',
+     ";"),
+    ("payee not checked", "worker.js", "&& addr(l.topics[2]) === req.payTo.toLowerCase()", ""),
+    ("amount not checked", "worker.js", '\n    && BigInt(l.data === "0x" ? 0 : l.data) >= BigInt(req.amount));', ");"),
+    ("receipt age not checked", "worker.js", "if (now - ts > Number(req.extra.maxReceiptAgeSeconds || 600) || ts - now > 30)", "if (false)"),
 ]
 
 
@@ -22,7 +22,7 @@ def main():
     ok = True
     for name, f, old, new in MUTANTS:
         with tempfile.TemporaryDirectory() as t:
-            d = Path(t) / "x402"; shutil.copytree(HERE, d, ignore=shutil.ignore_patterns("__pycache__"))
+            d = Path(t) / "worker"; shutil.copytree(HERE / "worker", d, ignore=shutil.ignore_patterns("node_modules", ".wrangler"))
             src = (d / f).read_text()
             if src.count(old) != 1:
                 print(f"BAD  mutant '{name}': anchor not found exactly once"); ok = False; continue
