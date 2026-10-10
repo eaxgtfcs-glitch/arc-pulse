@@ -21,4 +21,7 @@ x402-check:
 x402-mutate:
 	$(PY) x402/mutate_x402.py
 
+x402-live:   # the deployed endpoint, real mainnet payments (~$0.02)
+	ALLOW_MAINNET=1 $(PY) x402/check_x402.py --url https://arc-pulse-x402.arc-pulse.workers.dev/metrics --net mainnet
+
 verify: check mutate x402-check x402-mutate

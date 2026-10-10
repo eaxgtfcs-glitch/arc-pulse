@@ -28,12 +28,21 @@ async function deriveNonce(req, clientNonce) {
   return "0x" + [...h].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function rpc(url, method, params = []) {
-  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" },
-                               body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
-  const j = await r.json();
-  if (j.error) throw new Error(`${method}: ${j.error.message}`);
-  return j.result;
+// urls: comma-separated providers. First non-null answer wins: some providers refuse Workers' egress, and load-balanced
+// nodes can lag (a receipt the buyer already saw may be null on one node).
+async function rpc(urls, method, params = []) {
+  let err;
+  for (const url of urls.split(",")) {
+    try {
+      const r = await fetch(url.trim(), { method: "POST", headers: { "content-type": "application/json" },
+                                          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+      const j = await r.json();
+      if (j.error) throw new Error(`${method}: ${j.error.message}`);
+      if (j.result !== null && j.result !== undefined) return j.result;
+    } catch (e) { err = e; }
+  }
+  if (err) throw err;
+  return null;
 }
 
 const addr = t => "0x" + t.slice(-40).toLowerCase();

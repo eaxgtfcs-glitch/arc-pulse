@@ -31,9 +31,11 @@ of the page and requires the test to fail on each — so the check itself is tes
 
 ## Optional add-on: paid API for agents (x402)
 The monitor is complete and works on its own — everything above is live on mainnet today.
-On top of it we are adding an **optional** x402 endpoint: AI agents and bots can fetch the same verified metrics as JSON and pay per request
-in USDC on Arc ($0.001, EIP-3009 `transferWithAuthorization`, settled on-chain — no facilitator, no API keys). The free dashboard stays free;
-the paid API is an extra for machine clients. Status is tracked in the repo README.
+On top of it there is an **optional** x402 endpoint, live on Arc mainnet: https://arc-pulse-x402.arc-pulse.workers.dev/metrics —
+AI agents and bots fetch the same verified metrics as JSON and pay $0.01 per request in USDC on Arc (x402 `exact`,
+`eip3009-client-broadcast`: the buyer broadcasts `transferWithAuthorization`, the Worker verifies the receipt — no facilitator, no API keys).
+Checked with real mainnet payments against the public URL (paid → 200 + USDC Transfer; replay, underpay, wrong payee → 402).
+The free dashboard stays free; the paid API is an extra for machine clients.
 
 ## Where it goes next
 Alerts when a provider degrades; historical latency/fee charts for builders choosing an RPC; more networks' views for agents via the x402 API.

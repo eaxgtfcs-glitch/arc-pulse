@@ -81,7 +81,7 @@ def main():
     p, url = server()
     try:
         try:
-            urllib.request.urlopen(url, timeout=20); st = 200; body = {}
+            urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "arc-pulse-x402-client/1.0"}), timeout=20); st = 200; body = {}
         except urllib.error.HTTPError as e:
             st, body = e.code, json.loads(e.read())
         acc = (body.get("accepts") or [{}])[0]

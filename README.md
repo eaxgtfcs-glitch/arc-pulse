@@ -23,6 +23,11 @@ pings against the contract, fees against receipts, latency against the pinger lo
 Worker only verifies the receipt; nonce binding per the [x402-arc spec](https://github.com/kaditang/x402-arc), test vector matches).
 Price $0.01 (the buyer's gas is ≈$0.002). The free dashboard stays free.
 
-Status: implemented and checked with **real payments on Arc testnet** — `x402/check_x402.py` (paid → 200 with an on-chain USDC Transfer;
-replay, underpay, wrong payee and stale receipt → 402 with the right reason) and `x402/mutate_x402.py` (5 broken Workers, each caught —
-including Arc's native mirror `Transfer` ×1e12 trap). Public endpoint: coming next.
+**Live endpoint (Arc mainnet): https://arc-pulse-x402.arc-pulse.workers.dev/metrics** — `GET` without payment returns
+402 with the offer; pay $0.01 USDC per request. Checked with **real mainnet payments** against this public URL
+(`x402/check_x402.py --url … --net mainnet`: paid → 200 + on-chain USDC Transfer, e.g. tx
+[0x520e3c8c…](https://explorer.arc.io/tx/0x520e3c8c7ec359a9f87d57c10edee56b1bc5fe946195b06784b1e24ec19c73fd);
+replay, underpay with Arc's ×1e12 mirror Transfer and wrong payee → 402 with the reason), plus the full set on testnet locally and
+`x402/mutate_x402.py` (5 broken Workers, each caught). Client note: send any User-Agent — Cloudflare rejects bare `Python-urllib`
+(error 1010); `requests`, `httpx`, Node, curl are fine. Example buyer: `x402/pay.py`.
+

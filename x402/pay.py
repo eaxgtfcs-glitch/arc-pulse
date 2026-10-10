@@ -24,7 +24,8 @@ def arg(name, default=None):
 
 
 def http(url, header=None):
-    req = urllib.request.Request(url, headers={"X-PAYMENT": header, "PAYMENT-SIGNATURE": header} if header else {})
+    ua = {"User-Agent": "arc-pulse-x402-client/1.0"}   # Cloudflare answers bare Python-urllib with 403 / error 1010
+    req = urllib.request.Request(url, headers={**ua, "X-PAYMENT": header, "PAYMENT-SIGNATURE": header} if header else ua)
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.status, json.loads(r.read() or b"{}"), dict(r.headers)
