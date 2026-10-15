@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.key
+.env
+data/*.jsonl
+data/*.sqlite
+.wrangler/

@@ -1,0 +1,122 @@
+[
+ {
+  "inputs": [],
+  "stateMutability": "nonpayable",
+  "type": "constructor"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "seq",
+    "type": "uint256"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint64",
+    "name": "sentAtMs",
+    "type": "uint64"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint64",
+    "name": "ts",
+    "type": "uint64"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint32",
+    "name": "prevLatencyMs",
+    "type": "uint32"
+   }
+  ],
+  "name": "Ping",
+  "type": "event"
+ },
+ {
+  "inputs": [],
+  "name": "owner",
+  "outputs": [
+   {
+    "internalType": "address",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint64",
+    "name": "sentAtMs",
+    "type": "uint64"
+   },
+   {
+    "internalType": "uint32",
+    "name": "prevLatencyMs",
+    "type": "uint32"
+   }
+  ],
+  "name": "ping",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "recent",
+  "outputs": [
+   {
+    "components": [
+     {
+      "internalType": "uint64",
+      "name": "sentAtMs",
+      "type": "uint64"
+     },
+     {
+      "internalType": "uint64",
+      "name": "blockNumber",
+      "type": "uint64"
+     },
+     {
+      "internalType": "uint64",
+      "name": "ts",
+      "type": "uint64"
+     },
+     {
+      "internalType": "uint32",
+      "name": "prevLatencyMs",
+      "type": "uint32"
+     }
+    ],
+    "internalType": "struct Pinger.P[]",
+    "name": "out",
+    "type": "tuple[]"
+   },
+   {
+    "internalType": "uint256",
+    "name": "total",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "seq",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ }
+]
